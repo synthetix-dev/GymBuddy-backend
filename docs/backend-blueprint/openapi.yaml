@@ -1,0 +1,819 @@
+openapi: 3.1.0
+info:
+  title: GymBuddy API
+  version: 1.0.0
+  description: Complete MVP API Contract for GymBuddy (08-API-CONTRACT.md).
+servers:
+  - url: https://api.gymbuddy.app/v1
+    description: Production EU
+  - url: https://staging-api.gymbuddy.app/v1
+    description: Staging EU
+  - url: http://localhost:3000/v1
+    description: Local Development
+security:
+  - bearerAuth: []
+tags:
+  - name: Ops
+  - name: Identity
+  - name: Discover
+  - name: Social
+  - name: Chat
+  - name: Workouts
+  - name: Notifications
+  - name: Safety
+  - name: Admin
+paths:
+  /health/live:
+    get:
+      tags: [Ops]
+      operationId: getHealthLive
+      security: []
+      responses:
+        '200': { description: Process live }
+  /health/ready:
+    get:
+      tags: [Ops]
+      operationId: getHealthReady
+      security: []
+      responses:
+        '200': { description: Dependencies ready }
+        '503': { description: Dependency unavailable }
+  /me/bootstrap:
+    get:
+      tags: [Identity]
+      operationId: getBootstrap
+      responses:
+        '200':
+          description: Session bootstrap
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BootstrapResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /me/profile:
+    get:
+      tags: [Identity]
+      operationId: getMyProfile
+      responses:
+        '200':
+          description: Own profile
+          content: { application/json: { schema: { $ref: '#/components/schemas/ProfileResponse' } } }
+    patch:
+      tags: [Identity]
+      operationId: updateMyProfile
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfilePatch' }
+      responses:
+        '200':
+          description: Updated profile
+          content: { application/json: { schema: { $ref: '#/components/schemas/ProfileResponse' } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Validation' }
+  /me/settings:
+    get:
+      tags: [Identity]
+      operationId: getMySettings
+      responses:
+        '200': { description: User settings }
+    patch:
+      tags: [Identity]
+      operationId: updateMySettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SettingsPatch' }
+      responses:
+        '200': { description: Updated settings }
+        '422': { $ref: '#/components/responses/Validation' }
+  /me/location:
+    put:
+      tags: [Discover]
+      operationId: updateMyLocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [latitude, longitude]
+              properties:
+                latitude: { type: number, minimum: -90, maximum: 90 }
+                longitude: { type: number, minimum: -180, maximum: 180 }
+                accuracy_m: { type: integer, minimum: 0, maximum: 10000 }
+      responses:
+        '200': { description: Coarse location updated }
+        '422': { $ref: '#/components/responses/Validation' }
+  /me/photos/upload-intents:
+    post:
+      tags: [Identity]
+      operationId: createUploadIntent
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UploadIntentRequest' }
+      responses:
+        '201': { description: Signed upload intent created }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /me/photos/{id}/complete:
+    post:
+      tags: [Identity]
+      operationId: completeUpload
+      parameters:
+        - { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sha256: { type: string }
+                header_bytes_hex: { type: string }
+                width: { type: integer }
+                height: { type: integer }
+                set_as_avatar: { type: boolean }
+      responses:
+        '200': { description: Upload validated and variants generated }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Validation' }
+  /profiles/{id}:
+    get:
+      tags: [Identity]
+      operationId: getPublicProfile
+      parameters:
+        - { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+      responses:
+        '200':
+          description: Public profile projection
+          content: { application/json: { schema: { $ref: '#/components/schemas/ProfileResponse' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /profiles/{id}/block:
+    post:
+      tags: [Safety]
+      operationId: blockUser
+      parameters:
+        - { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '204': { description: User blocked }
+    delete:
+      tags: [Safety]
+      operationId: unblockUser
+      parameters:
+        - { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+      responses:
+        '204': { description: User unblocked }
+  /discover:
+    get:
+      tags: [Discover]
+      operationId: getDiscoverCandidates
+      parameters:
+        - { $ref: '#/components/parameters/Cursor' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: radius_km
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 15 }
+      responses:
+        '200':
+          description: Eligible candidates with rounded distance_km
+          content: { application/json: { schema: { $ref: '#/components/schemas/ProfilePage' } } }
+        '422': { $ref: '#/components/responses/Validation' }
+  /discover/{id}/actions:
+    post:
+      tags: [Discover]
+      operationId: performDiscoverAction
+      parameters:
+        - { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [pass, connect, hide] }
+      responses:
+        '200': { description: Action recorded }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Validation' }
+  /feed:
+    get:
+      tags: [Social]
+      operationId: getFeed
+      parameters:
+        - { $ref: '#/components/parameters/Cursor' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: mode
+          in: query
+          schema: { type: string, enum: [for_you, following], default: for_you }
+      responses:
+        '200':
+          description: Feed page
+          content: { application/json: { schema: { $ref: '#/components/schemas/PostPage' } } }
+        '410': { $ref: '#/components/responses/Gone' }
+  /posts:
+    post:
+      tags: [Social]
+      operationId: createPost
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreatePost' } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/PostResponse' } } } }
+        '422': { $ref: '#/components/responses/Validation' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /posts/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+    get:
+      tags: [Social]
+      operationId: getPost
+      responses:
+        '200': { description: Post detail, content: { application/json: { schema: { $ref: '#/components/schemas/PostResponse' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Social]
+      operationId: updatePost
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body, version]
+              properties:
+                body: { type: string, maxLength: 5000 }
+                version: { type: integer, minimum: 1 }
+      responses:
+        '200': { description: Updated post, content: { application/json: { schema: { $ref: '#/components/schemas/PostResponse' } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Social]
+      operationId: deletePost
+      responses:
+        '204': { description: Soft-deleted post }
+  /posts/{id}/like:
+    parameters:
+      - { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+    put:
+      tags: [Social]
+      operationId: likePost
+      responses:
+        '200': { description: Liked post }
+    delete:
+      tags: [Social]
+      operationId: unlikePost
+      responses:
+        '200': { description: Unliked post }
+  /posts/{id}/save:
+    parameters:
+      - { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+    put:
+      tags: [Social]
+      operationId: savePost
+      responses:
+        '204': { description: Saved post }
+    delete:
+      tags: [Social]
+      operationId: unsavePost
+      responses:
+        '204': { description: Unsaved post }
+  /posts/{id}/comments:
+    parameters:
+      - { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+    get:
+      tags: [Social]
+      operationId: listComments
+      responses:
+        '200': { description: Comment tree }
+    post:
+      tags: [Social]
+      operationId: createComment
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string, minLength: 1, maxLength: 1000 }
+                parent_id: { type: [string, 'null'], format: uuid }
+      responses:
+        '201': { description: Comment created }
+        '422': { $ref: '#/components/responses/Validation' }
+  /comments/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+    patch:
+      tags: [Social]
+      operationId: updateComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body, version]
+              properties:
+                body: { type: string, minLength: 1, maxLength: 1000 }
+                version: { type: integer, minimum: 1 }
+      responses:
+        '200': { description: Updated comment }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Social]
+      operationId: deleteComment
+      responses:
+        '204': { description: Deleted comment }
+  /search:
+    get:
+      tags: [Social]
+      operationId: searchContent
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: type, in: query, schema: { type: string, enum: [people, posts, recipes] } }
+        - { name: max_calories, in: query, schema: { type: integer, minimum: 0, maximum: 10000 } }
+      responses:
+        '200': { description: Search results }
+        '422': { $ref: '#/components/responses/Validation' }
+  /conversations:
+    get:
+      tags: [Chat]
+      operationId: listConversations
+      responses:
+        '200': { description: Conversation inbox }
+    post:
+      tags: [Chat]
+      operationId: createDirectConversation
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [participant_id]
+              properties:
+                participant_id: { $ref: '#/components/schemas/Uuid' }
+      responses:
+        '200': { description: Existing direct conversation }
+        '201': { description: Created direct conversation }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /conversations/{conversation_id}/membership:
+    patch:
+      tags: [Chat]
+      operationId: updateConversationMembership
+      parameters:
+        - { $ref: '#/components/parameters/ConversationId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                pinned: { type: boolean }
+                archived: { type: boolean }
+                clear_history: { type: boolean }
+                version: { type: integer, minimum: 1 }
+      responses:
+        '200': { description: Updated membership state }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /conversations/{conversation_id}/messages:
+    parameters:
+      - { $ref: '#/components/parameters/ConversationId' }
+    get:
+      tags: [Chat]
+      operationId: getMessages
+      parameters:
+        - { name: before_seq, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: after_seq, in: query, schema: { type: integer, minimum: 0 } }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/MessagePage' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Chat]
+      operationId: sendMessage
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SendMessage' } } }
+      responses:
+        '201': { description: Durable message, content: { application/json: { schema: { $ref: '#/components/schemas/MessageResponse' } } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Validation' }
+  /conversations/{conversation_id}/read-state:
+    put:
+      tags: [Chat]
+      operationId: updateReadState
+      parameters:
+        - { $ref: '#/components/parameters/ConversationId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [last_read_seq]
+              properties:
+                last_read_seq: { type: integer, minimum: 0 }
+      responses:
+        '200': { description: Monotonic read state updated }
+  /conversations/{conversation_id}/typing:
+    post:
+      tags: [Chat]
+      operationId: sendTypingSignal
+      parameters:
+        - { $ref: '#/components/parameters/ConversationId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [is_typing]
+              properties:
+                is_typing: { type: boolean }
+      responses:
+        '204': { description: Ephemeral typing signal broadcast }
+  /workout-sessions:
+    post:
+      tags: [Workouts]
+      operationId: createWorkoutSession
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateWorkoutSession' }
+      responses:
+        '201': { description: Workout session scheduled }
+        '422': { $ref: '#/components/responses/Validation' }
+  /workout-sessions/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+    get:
+      tags: [Workouts]
+      operationId: getWorkoutSession
+      responses:
+        '200': { description: Workout session details }
+    patch:
+      tags: [Workouts]
+      operationId: updateWorkoutSession
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                starts_at: { type: string, format: date-time }
+                timezone: { type: string }
+                gym_id: { type: [string, 'null'], format: uuid }
+                notes: { type: string }
+                status: { type: string, enum: [cancelled, in_progress, completed] }
+                version: { type: integer, minimum: 1 }
+      responses:
+        '200': { description: Updated workout session }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /workout-sessions/{id}/invitations:
+    post:
+      tags: [Workouts]
+      operationId: createWorkoutInvitation
+      parameters:
+        - { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invitee_id]
+              properties:
+                invitee_id: { $ref: '#/components/schemas/Uuid' }
+                message: { type: string, maxLength: 500 }
+                expires_at: { type: string, format: date-time }
+      responses:
+        '201': { description: Workout invitation sent }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /workout-invitations/{invitation_id}/accept:
+    post:
+      tags: [Workouts]
+      operationId: acceptWorkoutInvitation
+      parameters:
+        - { name: invitation_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/VersionCommand' } } }
+      responses:
+        '200': { description: Accepted invitation }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+  /workout-invitations/{invitation_id}/decline:
+    post:
+      tags: [Workouts]
+      operationId: declineWorkoutInvitation
+      parameters:
+        - { name: invitation_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/VersionCommand' } } }
+      responses:
+        '200': { description: Declined invitation }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /workout-invitations/{invitation_id}/revoke:
+    post:
+      tags: [Workouts]
+      operationId: revokeWorkoutInvitation
+      parameters:
+        - { name: invitation_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/VersionCommand' } } }
+      responses:
+        '200': { description: Revoked invitation }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /me/workout-sessions:
+    get:
+      tags: [Workouts]
+      operationId: listMyWorkoutSessions
+      parameters:
+        - { name: state, in: query, schema: { type: string, enum: [upcoming, history], default: upcoming } }
+      responses:
+        '200': { description: Filtered workout sessions }
+  /notifications:
+    get:
+      tags: [Notifications]
+      operationId: listNotifications
+      parameters:
+        - { $ref: '#/components/parameters/Cursor' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { name: unread_only, in: query, schema: { type: boolean } }
+      responses:
+        '200': { description: Notification inbox }
+  /notifications/{id}/read:
+    put:
+      tags: [Notifications]
+      operationId: markNotificationRead
+      parameters:
+        - { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+      responses:
+        '204': { description: Marked read }
+  /push-devices:
+    post:
+      tags: [Notifications]
+      operationId: registerPushDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, environment, bundle_id]
+              properties:
+                token: { type: string }
+                environment: { type: string, enum: [sandbox, production] }
+                bundle_id: { type: string }
+                device_name: { type: string }
+      responses:
+        '200': { description: Device registered }
+  /push-devices/{id}:
+    delete:
+      tags: [Notifications]
+      operationId: revokePushDevice
+      parameters:
+        - { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+      responses:
+        '204': { description: Device revoked }
+  /reports:
+    post:
+      tags: [Safety]
+      operationId: createReport
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateReport' } } }
+      responses:
+        '202': { description: Report accepted }
+        '422': { $ref: '#/components/responses/Validation' }
+  /me/data-export:
+    post:
+      tags: [Identity]
+      operationId: requestDataExport
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '202': { description: Export job queued }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /me/account-deletion:
+    post:
+      tags: [Identity]
+      operationId: requestAccountDeletion
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmation]
+              properties:
+                confirmation: { type: string, const: DELETE }
+                reason: { type: string }
+      responses:
+        '202': { description: Deletion cooling-off started }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Identity]
+      operationId: cancelAccountDeletion
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '204': { description: Pending deletion cancelled }
+  /admin/reports:
+    get:
+      tags: [Admin]
+      operationId: listAdminReports
+      responses:
+        '200': { description: Audited moderation report queue }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/cases/{id}/actions:
+    post:
+      tags: [Admin]
+      operationId: executeModerationAction
+      parameters:
+        - { name: id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, reason]
+              properties:
+                action:
+                  type: string
+                  enum: [no_action, warn, content_hide, interaction_limit, temporary_suspend, permanent_suspend, restore]
+                reason: { type: string }
+                duration_hours: { type: integer }
+                approved_by_admin_id: { $ref: '#/components/schemas/Uuid' }
+                version: { type: integer }
+      responses:
+        '200': { description: Moderation action executed and audited }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    Cursor: { name: cursor, in: query, schema: { type: string, maxLength: 1024 } }
+    Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }
+    ConversationId: { name: conversation_id, in: path, required: true, schema: { $ref: '#/components/schemas/Uuid' } }
+  responses:
+    Unauthorized: { description: Invalid session, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    Forbidden: { description: Not allowed, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    NotFound: { description: Not found, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    Conflict: { description: State/idempotency/version conflict, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    Gone: { description: Expired cursor or invitation, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    PayloadTooLarge: { description: Payload too large, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    UnsupportedMedia: { description: Unsupported media type, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    Validation: { description: Invalid input, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+    RateLimited: { description: Rate limited, headers: { Retry-After: { schema: { type: integer } } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+  schemas:
+    Uuid: { type: string, format: uuid }
+    Page: { type: object, required: [has_more], properties: { next_cursor: { type: [string, 'null'] }, has_more: { type: boolean } } }
+    Problem:
+      type: object
+      required: [type, title, status, code, request_id]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        request_id: { type: string }
+        errors: { type: array, items: { type: object, additionalProperties: true } }
+    Profile:
+      type: object
+      required: [id, public_code, display_name, version]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        public_code: { type: string }
+        display_name: { type: string }
+        bio: { type: string }
+        gender_code: { type: string }
+        age_years: { type: [integer, 'null'] }
+        experience_level: { type: string }
+        preferred_time: { type: string }
+        home_gym_id: { type: [string, 'null'], format: uuid }
+        home_gym_name: { type: [string, 'null'] }
+        city_label: { type: string }
+        distance_km: { type: [number, 'null'] }
+        version: { type: integer }
+    ProfilePatch:
+      type: object
+      required: [version]
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 80 }
+        birth_date: { type: string, format: date }
+        gender_code: { type: string }
+        bio: { type: string, maxLength: 500 }
+        experience_level: { type: string }
+        preferred_time: { type: string }
+        home_gym_id: { type: [string, 'null'], format: uuid }
+        onboarding_state: { type: string, enum: [profile_required, permissions_required, complete] }
+        interest_ids: { type: array, items: { $ref: '#/components/schemas/Uuid' } }
+        version: { type: integer, minimum: 1 }
+    SettingsPatch:
+      type: object
+      properties:
+        discovery_radius_km: { type: integer, minimum: 1, maximum: 100 }
+        discovery_visible: { type: boolean }
+        show_age: { type: boolean }
+        show_distance: { type: boolean }
+        show_online_status: { type: boolean }
+        push_enabled: { type: boolean }
+        push_messages: { type: boolean }
+        push_message_preview: { type: boolean }
+        push_workouts: { type: boolean }
+        push_social: { type: boolean }
+        quiet_hours_start: { type: [string, 'null'] }
+        quiet_hours_end: { type: [string, 'null'] }
+        timezone: { type: string }
+    UploadIntentRequest:
+      type: object
+      required: [purpose, mime_type, byte_size, sha256]
+      properties:
+        purpose: { type: string, enum: [avatar, profile_photo, post_image, message_attachment] }
+        mime_type: { type: string, enum: [image/jpeg, image/png, image/heic] }
+        byte_size: { type: integer, minimum: 1, maximum: 15728640 }
+        sha256: { type: string }
+    ProfileResponse: { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Profile' } } }
+    ProfilePage: { type: object, required: [data, page], properties: { data: { type: array, items: { $ref: '#/components/schemas/Profile' } }, page: { $ref: '#/components/schemas/Page' } } }
+    BootstrapResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [next_step, account_status]
+          properties:
+            next_step: { type: string, enum: [profile, permissions, discover] }
+            account_status: { type: string, enum: [active, suspended, deletion_pending] }
+            profile: { anyOf: [{ $ref: '#/components/schemas/Profile' }, { type: 'null' }] }
+    CreatePost:
+      oneOf:
+        - { $ref: '#/components/schemas/CreateTextPost' }
+        - { $ref: '#/components/schemas/CreateRecipePost' }
+        - { $ref: '#/components/schemas/CreateWorkoutPost' }
+      discriminator: { propertyName: type }
+    CreateTextPost: { type: object, required: [type, body], properties: { type: { const: text }, body: { type: string, maxLength: 5000 }, attachment_ids: { type: array, maxItems: 4, items: { $ref: '#/components/schemas/Uuid' } } } }
+    CreateRecipePost: { type: object, required: [type, body, recipe], properties: { type: { const: recipe }, body: { type: string }, recipe: { type: object, additionalProperties: true } } }
+    CreateWorkoutPost: { type: object, required: [type, body, workout], properties: { type: { const: workout }, body: { type: string }, workout: { type: object, additionalProperties: true } } }
+    Post: { type: object, required: [id, type, author, body, created_at, version], properties: { id: { $ref: '#/components/schemas/Uuid' }, type: { type: string, enum: [text, recipe, workout] }, author: { $ref: '#/components/schemas/Profile' }, body: { type: string }, created_at: { type: string, format: date-time }, version: { type: integer } }, additionalProperties: true }
+    PostResponse: { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Post' } } }
+    PostPage: { type: object, required: [data, page], properties: { data: { type: array, items: { $ref: '#/components/schemas/Post' } }, page: { $ref: '#/components/schemas/Page' } } }
+    SendMessage: { type: object, required: [client_message_id, kind], properties: { client_message_id: { $ref: '#/components/schemas/Uuid' }, kind: { type: string, enum: [text, image, workout_invitation] }, body: { type: string, maxLength: 4000 }, attachment_ids: { type: array, maxItems: 4, items: { $ref: '#/components/schemas/Uuid' } } } }
+    Message: { type: object, required: [id, conversation_id, client_message_id, server_seq, kind, created_at], properties: { id: { $ref: '#/components/schemas/Uuid' }, conversation_id: { $ref: '#/components/schemas/Uuid' }, client_message_id: { $ref: '#/components/schemas/Uuid' }, server_seq: { type: integer }, kind: { type: string }, body: { type: string }, created_at: { type: string, format: date-time } } }
+    MessageResponse: { type: object, required: [data], properties: { data: { $ref: '#/components/schemas/Message' } } }
+    MessagePage: { type: object, required: [data, page], properties: { data: { type: array, items: { $ref: '#/components/schemas/Message' } }, page: { $ref: '#/components/schemas/Page' } } }
+    CreateWorkoutSession:
+      type: object
+      required: [activity, starts_at]
+      properties:
+        title: { type: string }
+        activity: { type: string }
+        gym_id: { type: [string, 'null'], format: uuid }
+        coarse_location: { type: string }
+        starts_at: { type: string, format: date-time }
+        timezone: { type: string, default: Europe/Kyiv }
+        duration_minutes: { type: integer, default: 60 }
+        capacity: { type: integer, minimum: 2, maximum: 20, default: 2 }
+        notes: { type: string }
+    VersionCommand: { type: object, required: [version], properties: { version: { type: integer, minimum: 1 } } }
+    CreateReport: { type: object, required: [target_type, target_id, reason], properties: { target_type: { type: string, enum: [profile, post, comment, message, workout_session] }, target_id: { $ref: '#/components/schemas/Uuid' }, reason: { type: string, maxLength: 64 }, details: { type: string, maxLength: 2000 } } }

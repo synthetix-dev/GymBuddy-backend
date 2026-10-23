@@ -1,0 +1,43 @@
+name: GymBuddy Backend CI & Release Gate
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  verify-and-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck TypeScript
+        run: pnpm typecheck
+      - name: Validate OpenAPI 3.1 Contract
+        run: pnpm openapi:validate
+      - name: Run Database Migrations & Seed from Clean DB
+        run: pnpm db:reset
+      - name: Execute Full Security, RLS, Concurrency & E2E Test Suite
+        run: pnpm test
+      - name: Execute Backup Restore & Key Rotation Drills
+        run: pnpm drill:restore && pnpm drill:rotate-keys

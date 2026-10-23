@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/dmitro/Desktop/backend/sdk/swift/GymBuddyBackendSDK/.build/arm64-apple-macosx/debug/GymBuddyBackendSDKTests.build/master.swiftdeps"
+  },
+  "/Users/dmitro/Desktop/backend/sdk/swift/GymBuddyBackendSDK/Tests/GymBuddyBackendSDKTests/GymBuddySDKTests.swift": {
+    "dependencies": "/Users/dmitro/Desktop/backend/sdk/swift/GymBuddyBackendSDK/.build/arm64-apple-macosx/debug/GymBuddyBackendSDKTests.build/GymBuddySDKTests.d",
+    "object": "/Users/dmitro/Desktop/backend/sdk/swift/GymBuddyBackendSDK/.build/arm64-apple-macosx/debug/GymBuddyBackendSDKTests.build/GymBuddySDKTests.swift.o",
+    "swiftmodule": "/Users/dmitro/Desktop/backend/sdk/swift/GymBuddyBackendSDK/.build/arm64-apple-macosx/debug/GymBuddyBackendSDKTests.build/GymBuddySDKTests~partial.swiftmodule",
+    "swift-dependencies": "/Users/dmitro/Desktop/backend/sdk/swift/GymBuddyBackendSDK/.build/arm64-apple-macosx/debug/GymBuddyBackendSDKTests.build/GymBuddySDKTests.swiftdeps",
+    "diagnostics": "/Users/dmitro/Desktop/backend/sdk/swift/GymBuddyBackendSDK/.build/arm64-apple-macosx/debug/GymBuddyBackendSDKTests.build/GymBuddySDKTests.dia"
+  }
+}
