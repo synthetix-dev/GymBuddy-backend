@@ -219,141 +219,23 @@ public struct RealtimeEnvelopeDTO: Codable, Sendable, Equatable {
 }
 `;
 
-  const clientSwift = `import Foundation
-
-public protocol SecureTokenStorage: Sendable {
-    func getAccessToken() async -> String?
-    func getRefreshToken() async -> String?
-    func saveTokens(access: String, refresh: String) async
-    func clearTokens() async
-}
-
-public actor InMemorySecureTokenStorage: SecureTokenStorage {
-    private var accessToken: String?
-    private var refreshToken: String?
-
-    public init(accessToken: String? = nil, refreshToken: String? = nil) {
-        self.accessToken = accessToken
-        self.refreshToken = refreshToken
-    }
-
-    public func getAccessToken() async -> String? { accessToken }
-    public func getRefreshToken() async -> String? { refreshToken }
-    public func saveTokens(access: String, refresh: String) async {
-        self.accessToken = access
-        self.refreshToken = refresh
-    }
-    public func clearTokens() async {
-        self.accessToken = nil
-        self.refreshToken = nil
-    }
-}
-
-public actor GymBuddyAPIClient {
-    public let baseURL: URL
-    private let tokenStorage: SecureTokenStorage
-    private let urlSession: URLSession
-
-    public init(
-        baseURL: URL,
-        tokenStorage: SecureTokenStorage,
-        urlSession: URLSession = .shared
-    ) {
-        self.baseURL = baseURL
-        self.tokenStorage = tokenStorage
-        self.urlSession = urlSession
-    }
-
-    public func makeAuthorizedRequest(
-        path: String,
-        method: String = "GET",
-        idempotencyKey: UUID? = nil,
-        bodyData: Data? = nil
-    ) async throws -> URLRequest {
-        let endpoint = baseURL.appendingPathComponent(path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = method
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("req_\\(UUID().uuidString.lowercased())", forHTTPHeaderField: "X-Request-ID")
-
-        if let token = await tokenStorage.getAccessToken() {
-            request.setValue("Bearer \\(token)", forHTTPHeaderField: "Authorization")
-        }
-        if let idempotencyKey {
-            request.setValue(idempotencyKey.uuidString.lowercased(), forHTTPHeaderField: "Idempotency-Key")
-        }
-        if let bodyData {
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = bodyData
-        }
-        return request
-    }
-}
-`;
-
-  const testsSwift = `import XCTest
-@testable import GymBuddyBackendSDK
-
-final class GymBuddySDKTests: XCTestCase {
-    func testDecodeProblemDetails() throws {
-        let json = """
-        {
-          "type": "https://api.gymbuddy.app/problems/version-conflict",
-          "title": "Version conflict",
-          "status": 409,
-          "code": "VERSION_CONFLICT",
-          "detail": "Resource changed; refresh and retry.",
-          "request_id": "req_01",
-          "errors": [{"field": "version", "reason": "stale"}]
-        }
-        """.data(using: .utf8)!
-
-        let problem = try JSONDecoder().decode(APIProblemDetails.self, from: json)
-        XCTAssertEqual(problem.status, 409)
-        XCTAssertEqual(problem.code, "VERSION_CONFLICT")
-        XCTAssertEqual(problem.errors?.first?.field, "version")
-    }
-
-    func testDecodeBootstrapAndMessageEnvelope() async throws {
-        let msgJson = """
-        {
-          "data": {
-            "id": "99a00000-0000-4000-8000-000000000001",
-            "conversation_id": "8b000000-0000-4000-8000-000000000001",
-            "client_message_id": "4ac00000-0000-4000-8000-000000000001",
-            "server_seq": 91,
-            "kind": "text",
-            "body": "Thursday at 18:00 works!",
-            "created_at": "2026-10-23T16:31:04Z"
-          }
-        }
-        """.data(using: .utf8)!
-
-        let decoded = try JSONDecoder().decode(DataEnvelope<MessageDTO>.self, from: msgJson)
-        XCTAssertEqual(decoded.data.serverSeq, 91)
-        XCTAssertEqual(decoded.data.body, "Thursday at 18:00 works!")
-
-        let storage = InMemorySecureTokenStorage(accessToken: "jwt_123", refreshToken: "ref_123")
-        let client = GymBuddyAPIClient(baseURL: URL(string: "https://api.gymbuddy.app/v1")!, tokenStorage: storage)
-        let idem = UUID()
-        let req = try await client.makeAuthorizedRequest(path: "/conversations/123/messages", method: "POST", idempotencyKey: idem)
-        XCTAssertEqual(req.value(forHTTPHeaderField: "Authorization"), "Bearer jwt_123")
-        XCTAssertEqual(req.value(forHTTPHeaderField: "Idempotency-Key"), idem.uuidString.lowercased())
-    }
-}
-`;
+  const clientSwift = await fs.readFile(path.join(sourcesDir, 'GymBuddyAPIClient.swift'), 'utf8').catch(() => '');
+  const testsSwift = await fs.readFile(path.join(testsDir, 'GymBuddySDKTests.swift'), 'utf8').catch(() => '');
 
   const files = [
     path.join(packageDir, 'Package.swift'),
     path.join(sourcesDir, 'GymBuddyDTOs.swift'),
     path.join(sourcesDir, 'GymBuddyAPIClient.swift'),
+    path.join(sourcesDir, 'GymBuddyEndpoints.swift'),
+    path.join(sourcesDir, 'GymBuddyEndpointDTOs.swift'),
+    path.join(sourcesDir, 'GymBuddyRealtimeClient.swift'),
     path.join(testsDir, 'GymBuddySDKTests.swift'),
   ];
 
   await fs.writeFile(files[0]!, packageSwift, 'utf8');
   await fs.writeFile(files[1]!, dtosSwift, 'utf8');
-  await fs.writeFile(files[2]!, clientSwift, 'utf8');
-  await fs.writeFile(files[3]!, testsSwift, 'utf8');
+  if (clientSwift) await fs.writeFile(files[2]!, clientSwift, 'utf8');
+  if (testsSwift) await fs.writeFile(files[6]!, testsSwift, 'utf8');
 
   return { packageDir, files };
 }

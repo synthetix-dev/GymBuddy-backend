@@ -1,12 +1,6 @@
 import Foundation
 
 public extension GymBuddyAPIClient {
-    // MARK: Authentication
-    func signInWithApple(_ body: AppleSignInRequestDTO) async throws -> AuthSessionDTO {
-        let envelope: DataEnvelope<AuthSessionDTO> = try await request(path: "auth/apple", method: .post, authorized: false, body: body)
-        return envelope.data
-    }
-
     // MARK: Session/Profile
     func bootstrap() async throws -> BootstrapPayloadDTO {
         let envelope: DataEnvelope<BootstrapPayloadDTO> = try await request(path: "me/bootstrap")

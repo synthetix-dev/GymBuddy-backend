@@ -40,7 +40,7 @@ final class GymBuddySDKTests: XCTestCase {
         XCTAssertEqual(decoded.data.serverSeq, 91)
         XCTAssertEqual(decoded.data.body, "Thursday at 18:00 works!")
 
-        let storage = InMemorySecureTokenStorage(accessToken: "jwt_123", refreshToken: "ref_123")
+        let storage = InMemorySecureTokenStorage(accessToken: "jwt_123")
         let client = GymBuddyAPIClient(baseURL: URL(string: "https://api.gymbuddy.app/v1")!, tokenStorage: storage)
         let idem = UUID()
         let req = try await client.makeAuthorizedRequest(path: "/conversations/123/messages", method: "POST", idempotencyKey: idem)
