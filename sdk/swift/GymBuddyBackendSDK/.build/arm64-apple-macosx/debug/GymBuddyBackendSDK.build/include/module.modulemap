@@ -1,3 +1,0 @@
-module GymBuddyBackendSDK {
-    header "/Users/dmitro/Desktop/backend/sdk/swift/GymBuddyBackendSDK/.build/arm64-apple-macosx/debug/GymBuddyBackendSDK.build/include/GymBuddyBackendSDK-Swift.h"
-}

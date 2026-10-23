@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
 dist/
+.build/
+sdk/swift/GymBuddyBackendSDK/.build/
 
 # Environment Secrets (never commit values)
 .env
