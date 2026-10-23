@@ -112,8 +112,16 @@ public struct PostMediaDTO: Codable, Sendable, Equatable {
     enum CodingKeys: String, CodingKey { case position, url; case mediaObjectId = "media_object_id"; case altText = "alt_text" }
 }
 
-public struct RecipeIngredientDTO: Codable, Sendable, Equatable { public let position: Int?; public let text: String; public let quantity: Double?; public let unit: String? }
-public struct RecipeStepDTO: Codable, Sendable, Equatable { public let position: Int?; public let instruction: String }
+public struct RecipeIngredientDTO: Codable, Sendable, Equatable {
+    public let position: Int?; public let text: String; public let quantity: Double?; public let unit: String?
+    public init(position: Int? = nil, text: String, quantity: Double? = nil, unit: String? = nil) {
+        self.position = position; self.text = text; self.quantity = quantity; self.unit = unit
+    }
+}
+public struct RecipeStepDTO: Codable, Sendable, Equatable {
+    public let position: Int?; public let instruction: String
+    public init(position: Int? = nil, instruction: String) { self.position = position; self.instruction = instruction }
+}
 public struct RecipeDTO: Codable, Sendable, Equatable {
     public let title: String; public let subtitle: String?; public let difficulty: String?
     public let calories: Int; public let proteinG: Int?; public let carbsG: Int?; public let fatG: Int?
